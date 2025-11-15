@@ -10,117 +10,90 @@
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-            max-width: 600px;
-            margin: 0 auto;
+        body { 
+            font-family: Arial; 
+            max-width: 600px; 
+            margin: 0 auto; 
             padding: 15px;
-            background: var(--tg-theme-bg-color, #ffffff);
-            color: var(--tg-theme-text-color, #000000);
-        }
-        h1 {
-            text-align: center;
-            margin-bottom: 15px;
-            font-size: 24px;
+            background: var(--tg-theme-bg-color, #fff);
             color: var(--tg-theme-text-color, #000);
         }
-        #status {
-            text-align: center;
-            font-size: 18px;
-            font-weight: bold;
-            margin: 15px 0;
-            padding: 10px;
-            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
-            border-radius: 8px;
+        h1 { text-align: center; margin-bottom: 10px; }
+        #status { 
+            text-align: center; 
+            font-size: 18px; 
+            font-weight: bold; 
+            margin: 15px 0; 
+            padding: 10px; 
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0); 
+            border-radius: 8px; 
         }
-        #board {
-            width: 100%;
-            max-width: 500px;
-            margin: 0 auto 20px;
+        #board { width: 100%; max-width: 500px; margin: 0 auto 20px; }
+        .board-b72b1 { border: 2px solid #404040; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .white-1e1d7 { background-color: #f0d9b5; }
+        .black-3c85d { background-color: #b58863; }
+        .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }
+        button { 
+            padding: 12px 20px; 
+            font-size: 16px; 
+            border: none; 
+            border-radius: 8px; 
+            background: var(--tg-theme-button-color, #0088cc); 
+            color: var(--tg-theme-button-text-color, #fff); 
+            cursor: pointer; 
         }
-        .board-b72b1 {
-            border: 2px solid #404040;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            border-radius: 4px;
-        }
-        .white-1e1d7 {
-            background-color: #f0d9b5;
-        }
-        .black-3c85d {
-            background-color: #b58863;
-        }
-        .controls {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        button {
-            padding: 12px 24px;
-            font-size: 16px;
-            font-weight: 600;
-            border: none;
-            border-radius: 8px;
-            background: var(--tg-theme-button-color, #0088cc);
-            color: var(--tg-theme-button-text-color, #ffffff);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        button:hover {
-            opacity: 0.9;
-            transform: translateY(-2px);
-        }
-        button:active {
-            transform: translateY(0);
-        }
-        #moveHistory {
-            margin-top: 20px;
-            padding: 15px;
-            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
-            border-radius: 8px;
-            max-height: 150px;
-            overflow-y: auto;
+        button:active { opacity: 0.7; }
+        #moveHistory { 
+            margin-top: 15px; 
+            padding: 15px; 
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0); 
+            border-radius: 8px; 
+            max-height: 120px; 
+            overflow-y: auto; 
+            font-size: 14px;
         }
         .move-item {
             display: inline-block;
-            margin: 3px;
-            padding: 5px 10px;
+            margin: 2px;
+            padding: 4px 8px;
             background: var(--tg-theme-bg-color, #fff);
             border-radius: 4px;
-            font-size: 14px;
         }
-        .highlight-square {
-            box-shadow: inset 0 0 10px rgba(255, 255, 0, 0.5);
+        #gameInfo {
+            text-align: center;
+            padding: 10px;
+            background: var(--tg-theme-section-bg-color, #fff);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
     <h1>♟️ Шахматы</h1>
+    <div id="gameInfo">Ходов: <span id="moveCount">0</span></div>
     <div id="status">Ход белых</div>
     <div id="board"></div>
     <div class="controls">
-        <button onclick="newGame()">🔄 Новая игра</button>
-        <button onclick="undoMove()">↶ Отменить</button>
-        <button onclick="board.flip()">🔃 Перевернуть</button>
+        <button onclick="newGame()">🔄 Новая</button>
+        <button onclick="undoMove()">↶ Отмена</button>
+        <button onclick="board.flip()">🔃 Повернуть</button>
     </div>
     <div id="moveHistory"></div>
     
     <script>
-        // Инициализация Telegram Web App
         let tg = window.Telegram.WebApp;
         tg.expand();
         tg.enableClosingConfirmation();
         
-        // Игра
+        // Отключаем вертикальные свайпы
+        tg.setHeaderColor('secondary_bg_color');
+        tg.setBackgroundColor('bg_color');
+        
         let game = new Chess();
         let moveHistory = [];
+        let totalMoves = 0;
         
-        // Конфигурация доски
         let board = Chessboard('board', {
             draggable: true,
             position: 'start',
@@ -132,10 +105,9 @@
             pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
         });
         
-        // Обработчики
-        function onDragStart(source, piece, position, orientation) {
+        function onDragStart(source, piece) {
             if (game.game_over()) return false;
-            if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+            if ((game.turn() === 'w' && piece.search(/^b/) !== -1) || 
                 (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
                 return false;
             }
@@ -152,16 +124,39 @@
             
             if (move === null) return 'snapback';
             
+            // Сохранение хода
             moveHistory.push(move.san);
+            totalMoves++;
+            
+            // Обновление интерфейса
             updateMoveHistory();
             updateStatus();
+            updateMoveCount();
             
-            // Отправка в Telegram
-            tg.sendData(JSON.stringify({
-                type: 'move',
-                move: source + target,
-                san: move.san
-            }));
+            // Проверка окончания игры
+            if (game.game_over()) {
+                setTimeout(() => {
+                    let result = '';
+                    if (game.in_checkmate()) {
+                        let winner = game.turn() === 'w' ? 'Черные' : 'Белые';
+                        result = '🏆 МАТ! Победили ' + winner + '!';
+                    } else if (game.in_draw()) {
+                        result = '🤝 Ничья!';
+                    } else if (game.in_stalemate()) {
+                        result = '🤝 ПАТ!';
+                    }
+                    tg.showPopup({
+                        title: 'Игра окончена',
+                        message: result + '\nХодов: ' + totalMoves,
+                        buttons: [{type: 'ok'}]
+                    });
+                }, 300);
+            }
+            
+            // Легкая вибрация при ходе (если поддерживается)
+            if (tg.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred('light');
+            }
         }
         
         function onSnapEnd() {
@@ -203,13 +198,10 @@
             
             if (game.in_checkmate()) {
                 status = '🏆 МАТ! ' + (moveColor === 'Белые' ? 'Черные' : 'Белые') + ' победили!';
-                tg.showAlert(status);
             } else if (game.in_draw()) {
                 status = '🤝 Ничья!';
-                tg.showAlert(status);
             } else if (game.in_stalemate()) {
                 status = '🤝 ПАТ!';
-                tg.showAlert(status);
             } else {
                 status = 'Ход: ' + moveColor;
                 if (game.in_check()) {
@@ -222,25 +214,42 @@
         
         function updateMoveHistory() {
             let html = '<strong>История ходов:</strong><br>';
-            moveHistory.forEach((move, index) => {
-                html += `<span class="move-item">${index + 1}. ${move}</span>`;
-            });
+            for (let i = 0; i < moveHistory.length; i++) {
+                if (i % 2 === 0) {
+                    html += '<span class="move-item">' + (Math.floor(i/2) + 1) + '. ' + moveHistory[i];
+                    if (moveHistory[i + 1]) {
+                        html += ' ' + moveHistory[i + 1];
+                    }
+                    html += '</span> ';
+                }
+            }
             document.getElementById('moveHistory').innerHTML = html;
-            document.getElementById('moveHistory').scrollTop = document.getElementById('moveHistory').scrollHeight;
+            
+            // Прокрутка вниз
+            let historyDiv = document.getElementById('moveHistory');
+            historyDiv.scrollTop = historyDiv.scrollHeight;
+        }
+        
+        function updateMoveCount() {
+            document.getElementById('moveCount').textContent = totalMoves;
         }
         
         function newGame() {
-            if (confirm('Начать новую игру?')) {
-                game.reset();
-                board.start();
-                moveHistory = [];
-                updateStatus();
-                updateMoveHistory();
-                
-                tg.sendData(JSON.stringify({ 
-                    type: 'new_game' 
-                }));
-            }
+            tg.showConfirm('Начать новую игру?', function(confirmed) {
+                if (confirmed) {
+                    game.reset();
+                    board.start();
+                    moveHistory = [];
+                    totalMoves = 0;
+                    updateStatus();
+                    updateMoveHistory();
+                    updateMoveCount();
+                    
+                    if (tg.HapticFeedback) {
+                        tg.HapticFeedback.notificationOccurred('success');
+                    }
+                }
+            });
         }
         
         function undoMove() {
@@ -248,23 +257,30 @@
             if (move) {
                 board.position(game.fen());
                 moveHistory.pop();
+                totalMoves = Math.max(0, totalMoves - 1);
                 updateStatus();
                 updateMoveHistory();
+                updateMoveCount();
+                
+                if (tg.HapticFeedback) {
+                    tg.HapticFeedback.impactOccurred('light');
+                }
             }
         }
         
-        // Адаптация под тему
-        if (tg.colorScheme === 'dark') {
-            document.body.style.background = '#18222d';
-        }
-        
-        // Адаптивность
-        window.addEventListener('resize', () => {
+        // Адаптация под размер экрана
+        window.addEventListener('resize', function() {
             board.resize();
         });
         
         // Инициализация
         updateStatus();
+        updateMoveCount();
+        
+        // Адаптация под тему Telegram
+        if (tg.colorScheme === 'dark') {
+            document.body.style.background = '#18222d';
+        }
     </script>
 </body>
 </html>
