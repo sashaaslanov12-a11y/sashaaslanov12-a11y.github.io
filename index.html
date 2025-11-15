@@ -9,6 +9,11 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    
     <style>
         body { 
             font-family: Arial; 
@@ -19,6 +24,27 @@
             color: var(--tg-theme-text-color, #000);
         }
         h1 { text-align: center; margin-bottom: 10px; }
+        
+        #modeSelect {
+            text-align: center;
+            margin: 20px 0;
+        }
+        #modeSelect button {
+            display: block;
+            width: 100%;
+            max-width: 300px;
+            margin: 10px auto;
+            padding: 15px;
+            font-size: 18px;
+            border: none;
+            border-radius: 10px;
+            background: var(--tg-theme-button-color, #0088cc);
+            color: var(--tg-theme-button-text-color, #fff);
+            cursor: pointer;
+        }
+        
+        #gameContainer { display: none; }
+        
         #status { 
             text-align: center; 
             font-size: 18px; 
@@ -28,10 +54,33 @@
             background: var(--tg-theme-secondary-bg-color, #f0f0f0); 
             border-radius: 8px; 
         }
+        
+        #playerInfo {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        .player {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .player.active {
+            font-weight: bold;
+            color: var(--tg-theme-button-color, #0088cc);
+        }
+        
         #board { width: 100%; max-width: 500px; margin: 0 auto 20px; }
         .board-b72b1 { border: 2px solid #404040; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
         .white-1e1d7 { background-color: #f0d9b5; }
         .black-3c85d { background-color: #b58863; }
+        
         .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }
         button { 
             padding: 12px 20px; 
@@ -43,6 +92,8 @@
             cursor: pointer; 
         }
         button:active { opacity: 0.7; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        
         #moveHistory { 
             margin-top: 15px; 
             padding: 15px; 
@@ -52,6 +103,7 @@
             overflow-y: auto; 
             font-size: 14px;
         }
+        
         .move-item {
             display: inline-block;
             margin: 2px;
@@ -59,64 +111,337 @@
             background: var(--tg-theme-bg-color, #fff);
             border-radius: 4px;
         }
-        #gameInfo {
-            text-align: center;
-            padding: 10px;
-            background: var(--tg-theme-section-bg-color, #fff);
-            border-radius: 8px;
-            margin-bottom: 10px;
-            font-size: 14px;
+        
+        #searchingOverlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            color: white;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #0088cc;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
     <h1>♟️ Шахматы</h1>
-    <div id="gameInfo">Ходов: <span id="moveCount">0</span></div>
-    <div id="status">Ход белых</div>
-    <div id="board"></div>
-    <div class="controls">
-        <button onclick="newGame()">🔄 Новая</button>
-        <button onclick="undoMove()">↶ Отмена</button>
-        <button onclick="board.flip()">🔃 Повернуть</button>
+    
+    <!-- Выбор режима -->
+    <div id="modeSelect">
+        <h2>Выберите режим игры:</h2>
+        <button onclick="startLocalGame()">👤 Играть с собой</button>
+        <button onclick="searchOpponent()">🌐 Играть онлайн</button>
     </div>
-    <div id="moveHistory"></div>
+    
+    <!-- Поиск соперника -->
+    <div id="searchingOverlay">
+        <div class="spinner"></div>
+        <h2>🔍 Поиск соперника...</h2>
+        <p>Ожидайте подключения</p>
+        <button onclick="cancelSearch()" style="margin-top: 20px;">Отменить</button>
+    </div>
+    
+    <!-- Игровой контейнер -->
+    <div id="gameContainer">
+        <div id="playerInfo">
+            <div class="player" id="player1">
+                <span>⬜</span>
+                <span id="player1Name">Вы</span>
+            </div>
+            <div class="player" id="player2">
+                <span>⬛</span>
+                <span id="player2Name">Соперник</span>
+            </div>
+        </div>
+        
+        <div id="status">Ход белых</div>
+        <div id="board"></div>
+        
+        <div class="controls">
+            <button onclick="leaveGame()">🚪 Выйти</button>
+            <button onclick="offerDraw()" id="drawBtn">🤝 Предложить ничью</button>
+            <button onclick="resign()">🏳️ Сдаться</button>
+        </div>
+        
+        <div id="moveHistory"></div>
+    </div>
     
     <script>
+        // ============= КОНФИГУРАЦИЯ FIREBASE =============
+        // 👇 ВСТАВЬТЕ СЮДА ВАШУ КОНФИГУРАЦИЮ ИЗ FIREBASE
+        const firebaseConfig = {
+        apiKey: "AIzaSyAzAyiWKbGDAHguSTvIsnd0-Ki6rMj09Ps",
+        authDomain: "chess-bot-83296.firebaseapp.com",
+        databaseURL: "https://chess-bot-83296-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "chess-bot-83296",
+        storageBucket: "chess-bot-83296.firebasestorage.app",
+        messagingSenderId: "770339691566",
+        appId: "1:770339691566:web:2d7ee1df85497cd18a93bf",
+        measurementId: "G-0JEP0N3E66"
+        };
+        
+        // Инициализация Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        
+        // ============= TELEGRAM WEB APP =============
         let tg = window.Telegram.WebApp;
         tg.expand();
         tg.enableClosingConfirmation();
         
-        // Отключаем вертикальные свайпы
-        tg.setHeaderColor('secondary_bg_color');
-        tg.setBackgroundColor('bg_color');
-        
+        // ============= ИГРОВЫЕ ПЕРЕМЕННЫЕ =============
         let game = new Chess();
+        let board = null;
+        let gameId = null;
+        let playerId = null;
+        let playerColor = null;
+        let isOnlineGame = false;
         let moveHistory = [];
-        let totalMoves = 0;
+        let gameRef = null;
         
-        let board = Chessboard('board', {
-            draggable: true,
-            position: 'start',
-            onDragStart: onDragStart,
-            onDrop: onDrop,
-            onSnapEnd: onSnapEnd,
-            onMouseoutSquare: onMouseoutSquare,
-            onMouseoverSquare: onMouseoverSquare,
-            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
-        });
+        // ID пользователя из Telegram
+        playerId = tg.initDataUnsafe?.user?.id || 'user_' + Math.random().toString(36).substr(2, 9);
+        
+        // ============= РЕЖИМЫ ИГРЫ =============
+        
+        function startLocalGame() {
+            isOnlineGame = false;
+            playerColor = 'both';
+            document.getElementById('modeSelect').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'block';
+            document.getElementById('drawBtn').style.display = 'none';
+            initBoard();
+            updateStatus();
+        }
+        
+        function searchOpponent() {
+            isOnlineGame = true;
+            document.getElementById('searchingOverlay').style.display = 'flex';
+            
+            // Поиск доступной игры или создание новой
+            const waitingGamesRef = database.ref('waiting_games');
+            
+            waitingGamesRef.once('value', (snapshot) => {
+                const waitingGames = snapshot.val();
+                let foundGame = false;
+                
+                // Ищем доступную игру
+                if (waitingGames) {
+                    for (let gId in waitingGames) {
+                        if (waitingGames[gId].player1 !== playerId) {
+                            // Найдена игра!
+                            joinGame(gId);
+                            foundGame = true;
+                            break;
+                        }
+                    }
+                }
+                
+                // Если не нашли, создаем новую
+                if (!foundGame) {
+                    createGame();
+                }
+            });
+        }
+        
+        function createGame() {
+            gameId = 'game_' + Date.now();
+            gameRef = database.ref('games/' + gameId);
+            
+            const gameData = {
+                player1: playerId,
+                player1Name: tg.initDataUnsafe?.user?.first_name || 'Игрок 1',
+                player2: null,
+                player2Name: null,
+                fen: game.fen(),
+                turn: 'w',
+                moves: [],
+                status: 'waiting',
+                created: Date.now()
+            };
+            
+            gameRef.set(gameData);
+            database.ref('waiting_games/' + gameId).set({
+                player1: playerId,
+                created: Date.now()
+            });
+            
+            playerColor = 'w';
+            
+            // Слушаем подключение соперника
+            gameRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data && data.player2) {
+                    // Соперник подключился!
+                    database.ref('waiting_games/' + gameId).remove();
+                    startOnlineGame(data);
+                }
+            });
+        }
+        
+        function joinGame(gId) {
+            gameId = gId;
+            gameRef = database.ref('games/' + gameId);
+            playerColor = 'b';
+            
+            // Присоединяемся к игре
+            gameRef.update({
+                player2: playerId,
+                player2Name: tg.initDataUnsafe?.user?.first_name || 'Игрок 2',
+                status: 'active'
+            });
+            
+            database.ref('waiting_games/' + gameId).remove();
+            
+            gameRef.once('value', (snapshot) => {
+                startOnlineGame(snapshot.val());
+            });
+        }
+        
+        function startOnlineGame(gameData) {
+            document.getElementById('searchingOverlay').style.display = 'none';
+            document.getElementById('modeSelect').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'block';
+            
+            // Обновляем имена игроков
+            if (playerColor === 'w') {
+                document.getElementById('player1Name').textContent = 'Вы (Белые)';
+                document.getElementById('player2Name').textContent = gameData.player2Name || 'Соперник';
+            } else {
+                document.getElementById('player1Name').textContent = gameData.player1Name || 'Соперник';
+                document.getElementById('player2Name').textContent = 'Вы (Черные)';
+            }
+            
+            initBoard();
+            
+            // Если играем черными, переворачиваем доску
+            if (playerColor === 'b') {
+                board.orientation('black');
+            }
+            
+            // Слушаем изменения в игре
+            gameRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    updateGameFromServer(data);
+                }
+            });
+            
+            updateStatus();
+            
+            tg.showPopup({
+                title: 'Игра началась!',
+                message: 'Соперник найден. Удачи!',
+                buttons: [{type: 'ok'}]
+            });
+        }
+        
+        function cancelSearch() {
+            if (gameRef) {
+                gameRef.remove();
+                database.ref('waiting_games/' + gameId).remove();
+            }
+            location.reload();
+        }
+        
+        function leaveGame() {
+            tg.showConfirm('Вы уверены что хотите выйти?', (confirmed) => {
+                if (confirmed) {
+                    if (gameRef && isOnlineGame) {
+                        gameRef.update({ 
+                            status: 'abandoned',
+                            winner: playerColor === 'w' ? 'b' : 'w'
+                        });
+                        gameRef.off();
+                    }
+                    location.reload();
+                }
+            });
+        }
+        
+        function resign() {
+            tg.showConfirm('Вы уверены что хотите сдаться?', (confirmed) => {
+                if (confirmed) {
+                    if (isOnlineGame && gameRef) {
+                        gameRef.update({
+                            status: 'finished',
+                            winner: playerColor === 'w' ? 'b' : 'w',
+                            result: 'resignation'
+                        });
+                    }
+                    tg.showAlert('Вы сдались');
+                }
+            });
+        }
+        
+        function offerDraw() {
+            if (isOnlineGame && gameRef) {
+                tg.showConfirm('Предложить ничью сопернику?', (confirmed) => {
+                    if (confirmed) {
+                        gameRef.child('drawOffer').set(playerColor);
+                        tg.showAlert('Предложение отправлено');
+                    }
+                });
+            }
+        }
+        
+        // ============= ШАХМАТНАЯ ЛОГИКА =============
+        
+        function initBoard() {
+            const config = {
+                draggable: true,
+                position: 'start',
+                onDragStart: onDragStart,
+                onDrop: onDrop,
+                onSnapEnd: onSnapEnd,
+                pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+            };
+            
+            board = Chessboard('board', config);
+            game.reset();
+            moveHistory = [];
+        }
         
         function onDragStart(source, piece) {
+            // Запрет хода если игра окончена
             if (game.game_over()) return false;
-            if ((game.turn() === 'w' && piece.search(/^b/) !== -1) || 
-                (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
-                return false;
+            
+            // В онлайн игре - только свои фигуры и свой ход
+            if (isOnlineGame) {
+                if (playerColor === 'w' && piece.search(/^b/) !== -1) return false;
+                if (playerColor === 'b' && piece.search(/^w/) !== -1) return false;
+                if (game.turn() !== playerColor) return false;
+            } else {
+                // В локальной игре - по очереди
+                if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+                    (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+                    return false;
+                }
             }
         }
         
         function onDrop(source, target) {
-            removeHighlights();
-            
-            let move = game.move({
+            const move = game.move({
                 from: source,
                 to: target,
                 promotion: 'q'
@@ -124,36 +449,44 @@
             
             if (move === null) return 'snapback';
             
-            // Сохранение хода
             moveHistory.push(move.san);
-            totalMoves++;
-            
-            // Обновление интерфейса
             updateMoveHistory();
             updateStatus();
-            updateMoveCount();
             
-            // Проверка окончания игры
-            if (game.game_over()) {
-                setTimeout(() => {
-                    let result = '';
-                    if (game.in_checkmate()) {
-                        let winner = game.turn() === 'w' ? 'Черные' : 'Белые';
-                        result = '🏆 МАТ! Победили ' + winner + '!';
-                    } else if (game.in_draw()) {
-                        result = '🤝 Ничья!';
-                    } else if (game.in_stalemate()) {
-                        result = '🤝 ПАТ!';
+            // Отправка хода на сервер
+            if (isOnlineGame && gameRef) {
+                gameRef.update({
+                    fen: game.fen(),
+                    turn: game.turn(),
+                    moves: moveHistory,
+                    lastMove: {
+                        from: source,
+                        to: target,
+                        san: move.san,
+                        timestamp: Date.now()
                     }
-                    tg.showPopup({
-                        title: 'Игра окончена',
-                        message: result + '\nХодов: ' + totalMoves,
-                        buttons: [{type: 'ok'}]
-                    });
-                }, 300);
+                });
+                
+                // Проверка окончания игры
+                if (game.game_over()) {
+                    let result = {};
+                    if (game.in_checkmate()) {
+                        result = {
+                            status: 'finished',
+                            winner: game.turn() === 'w' ? 'b' : 'w',
+                            result: 'checkmate'
+                        };
+                    } else {
+                        result = {
+                            status: 'finished',
+                            winner: 'draw',
+                            result: game.in_stalemate() ? 'stalemate' : 'draw'
+                        };
+                    }
+                    gameRef.update(result);
+                }
             }
             
-            // Легкая вибрация при ходе (если поддерживается)
             if (tg.HapticFeedback) {
                 tg.HapticFeedback.impactOccurred('light');
             }
@@ -163,57 +496,108 @@
             board.position(game.fen());
         }
         
-        function onMouseoverSquare(square, piece) {
-            let moves = game.moves({
-                square: square,
-                verbose: true
-            });
+        function updateGameFromServer(data) {
+            if (!data) return;
             
-            if (moves.length === 0) return;
-            
-            highlightSquare(square);
-            
-            for (let i = 0; i < moves.length; i++) {
-                highlightSquare(moves[i].to);
+            // Обновляем позицию если она изменилась
+            if (data.fen !== game.fen()) {
+                game.load(data.fen);
+                board.position(data.fen);
+                moveHistory = data.moves || [];
+                updateMoveHistory();
+                updateStatus();
+                
+                if (tg.HapticFeedback) {
+                    tg.HapticFeedback.notificationOccurred('success');
+                }
             }
-        }
-        
-        function onMouseoutSquare(square, piece) {
-            removeHighlights();
-        }
-        
-        function highlightSquare(square) {
-            let $square = $('#board .square-' + square);
-            let background = $square.hasClass('black-3c85d') ? '#696969' : '#a9a9a9';
-            $square.css('background', background);
-        }
-        
-        function removeHighlights() {
-            $('#board .square-55d63').css('background', '');
+            
+            // Проверка предложения ничьи
+            if (data.drawOffer && data.drawOffer !== playerColor) {
+                gameRef.child('drawOffer').remove();
+                tg.showConfirm('Соперник предлагает ничью. Принять?', (confirmed) => {
+                    if (confirmed) {
+                        gameRef.update({
+                            status: 'finished',
+                            winner: 'draw',
+                            result: 'agreement'
+                        });
+                    }
+                });
+            }
+            
+            // Проверка окончания игры
+            if (data.status === 'finished') {
+                let message = '';
+                if (data.winner === playerColor) {
+                    message = '🏆 Вы победили!';
+                } else if (data.winner === 'draw') {
+                    message = '🤝 Ничья!';
+                } else {
+                    message = '😞 Вы проиграли';
+                }
+                
+                setTimeout(() => {
+                    tg.showPopup({
+                        title: 'Игра окончена',
+                        message: message,
+                        buttons: [{type: 'ok'}]
+                    });
+                }, 500);
+            }
+            
+            if (data.status === 'abandoned') {
+                tg.showAlert('Соперник покинул игру. Вы победили!');
+            }
         }
         
         function updateStatus() {
             let status = '';
             let moveColor = game.turn() === 'w' ? 'Белые' : 'Черные';
             
+            // Подсветка активного игрока
+            document.getElementById('player1').classList.remove('active');
+            document.getElementById('player2').classList.remove('active');
+            
+            if (isOnlineGame) {
+                if ((playerColor === 'w' && game.turn() === 'w') ||
+                    (playerColor === 'b' && game.turn() === 'b')) {
+                    status = '🟢 Ваш ход';
+                    if (playerColor === 'w') {
+                        document.getElementById('player1').classList.add('active');
+                    } else {
+                        document.getElementById('player2').classList.add('active');
+                    }
+                } else {
+                    status = '⏳ Ход соперника...';
+                    if (playerColor === 'w') {
+                        document.getElementById('player2').classList.add('active');
+                    } else {
+                        document.getElementById('player1').classList.add('active');
+                    }
+                }
+            } else {
+                status = 'Ход: ' + moveColor;
+                if (game.turn() === 'w') {
+                    document.getElementById('player1').classList.add('active');
+                } else {
+                    document.getElementById('player2').classList.add('active');
+                }
+            }
+            
             if (game.in_checkmate()) {
                 status = '🏆 МАТ! ' + (moveColor === 'Белые' ? 'Черные' : 'Белые') + ' победили!';
             } else if (game.in_draw()) {
                 status = '🤝 Ничья!';
-            } else if (game.in_stalemate()) {
-                status = '🤝 ПАТ!';
-            } else {
-                status = 'Ход: ' + moveColor;
-                if (game.in_check()) {
-                    status += ' ⚠️ ШАХ!';
-                }
+            } else if (game.in_check()) {
+                status += ' ⚠️ ШАХ!';
             }
             
             document.getElementById('status').textContent = status;
         }
         
         function updateMoveHistory() {
-            let html = '<strong>История ходов:</strong><br>';
+            let html = '<strong>История:</strong><br>';
             for (let i = 0; i < moveHistory.length; i++) {
                 if (i % 2 === 0) {
                     html += '<span class="move-item">' + (Math.floor(i/2) + 1) + '. ' + moveHistory[i];
@@ -224,63 +608,10 @@
                 }
             }
             document.getElementById('moveHistory').innerHTML = html;
-            
-            // Прокрутка вниз
-            let historyDiv = document.getElementById('moveHistory');
-            historyDiv.scrollTop = historyDiv.scrollHeight;
         }
         
-        function updateMoveCount() {
-            document.getElementById('moveCount').textContent = totalMoves;
-        }
-        
-        function newGame() {
-            tg.showConfirm('Начать новую игру?', function(confirmed) {
-                if (confirmed) {
-                    game.reset();
-                    board.start();
-                    moveHistory = [];
-                    totalMoves = 0;
-                    updateStatus();
-                    updateMoveHistory();
-                    updateMoveCount();
-                    
-                    if (tg.HapticFeedback) {
-                        tg.HapticFeedback.notificationOccurred('success');
-                    }
-                }
-            });
-        }
-        
-        function undoMove() {
-            let move = game.undo();
-            if (move) {
-                board.position(game.fen());
-                moveHistory.pop();
-                totalMoves = Math.max(0, totalMoves - 1);
-                updateStatus();
-                updateMoveHistory();
-                updateMoveCount();
-                
-                if (tg.HapticFeedback) {
-                    tg.HapticFeedback.impactOccurred('light');
-                }
-            }
-        }
-        
-        // Адаптация под размер экрана
-        window.addEventListener('resize', function() {
-            board.resize();
-        });
-        
-        // Инициализация
-        updateStatus();
-        updateMoveCount();
-        
-        // Адаптация под тему Telegram
-        if (tg.colorScheme === 'dark') {
-            document.body.style.background = '#18222d';
-        }
+        // Адаптация
+        window.addEventListener('resize', () => { if (board) board.resize(); });
     </script>
 </body>
 </html>
