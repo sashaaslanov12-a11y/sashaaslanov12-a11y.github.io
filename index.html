@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Шахматы</title>
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -15,15 +15,43 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            position: fixed;
+            overscroll-behavior: none;
+        }
+        
         body { 
-            font-family: Arial; 
-            max-width: 600px; 
-            margin: 0 auto; 
-            padding: 15px;
+            font-family: Arial, sans-serif;
             background: var(--tg-theme-bg-color, #fff);
             color: var(--tg-theme-text-color, #000);
+            touch-action: pan-y;
         }
-        h1 { text-align: center; margin-bottom: 10px; }
+        
+        #app {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 10px;
+            height: 100vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        h1 { 
+            text-align: center; 
+            margin-bottom: 10px;
+            font-size: 22px;
+        }
         
         #modeSelect {
             text-align: center;
@@ -47,10 +75,10 @@
         
         #status { 
             text-align: center; 
-            font-size: 18px; 
+            font-size: 16px; 
             font-weight: bold; 
-            margin: 15px 0; 
-            padding: 10px; 
+            margin: 10px 0; 
+            padding: 8px; 
             background: var(--tg-theme-secondary-bg-color, #f0f0f0); 
             border-radius: 8px; 
         }
@@ -58,11 +86,11 @@
         #playerInfo {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 10px;
-            padding: 10px;
+            margin-bottom: 8px;
+            padding: 8px;
             background: var(--tg-theme-secondary-bg-color, #f0f0f0);
             border-radius: 8px;
-            font-size: 14px;
+            font-size: 13px;
         }
         
         .player {
@@ -76,40 +104,95 @@
             color: var(--tg-theme-button-color, #0088cc);
         }
         
-        #board { width: 100%; max-width: 500px; margin: 0 auto 20px; }
-        .board-b72b1 { border: 2px solid #404040; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        #boardContainer {
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto 15px;
+            touch-action: none !important;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        #board { 
+            width: 100%;
+            touch-action: none !important;
+            -webkit-user-drag: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        #board img {
+            pointer-events: none;
+            -webkit-user-drag: none;
+            user-select: none;
+        }
+        
+        .board-b72b1 { 
+            border: 2px solid #404040; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            touch-action: none !important;
+        }
+        
         .white-1e1d7 { background-color: #f0d9b5; }
         .black-3c85d { background-color: #b58863; }
         
-        .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }
+        .square-55d63.selected {
+            box-shadow: inset 0 0 0 3px yellow !important;
+        }
+        
+        .square-55d63.possible-move::after {
+            content: '';
+            position: absolute;
+            width: 25%;
+            height: 25%;
+            background: rgba(0, 255, 0, 0.5);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        
+        .controls { 
+            display: flex; 
+            gap: 8px; 
+            justify-content: center; 
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        
         button { 
-            padding: 12px 20px; 
-            font-size: 16px; 
+            padding: 10px 16px; 
+            font-size: 14px; 
             border: none; 
             border-radius: 8px; 
             background: var(--tg-theme-button-color, #0088cc); 
             color: var(--tg-theme-button-text-color, #fff); 
-            cursor: pointer; 
+            cursor: pointer;
+            touch-action: manipulation;
         }
-        button:active { opacity: 0.7; }
+        button:active { 
+            opacity: 0.7;
+            transform: scale(0.95);
+        }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
         
         #moveHistory { 
-            margin-top: 15px; 
-            padding: 15px; 
+            margin-top: 10px; 
+            padding: 10px; 
             background: var(--tg-theme-secondary-bg-color, #f0f0f0); 
             border-radius: 8px; 
-            max-height: 120px; 
+            max-height: 100px; 
             overflow-y: auto; 
-            font-size: 14px;
+            font-size: 13px;
         }
         
         .move-item {
             display: inline-block;
             margin: 2px;
-            padding: 4px 8px;
+            padding: 3px 6px;
             background: var(--tg-theme-bg-color, #fff);
             border-radius: 4px;
+            font-size: 12px;
         }
         
         #searchingOverlay {
@@ -141,63 +224,92 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        #clickModeToggle {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 12px;
+        }
+        
+        #clickModeToggle label {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 5px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
-    <h1>♟️ Шахматы</h1>
-    
-    <!-- Выбор режима -->
-    <div id="modeSelect">
-        <h2>Выберите режим игры:</h2>
-        <button onclick="startLocalGame()">👤 Играть с собой</button>
-        <button onclick="searchOpponent()">🌐 Играть онлайн</button>
-    </div>
-    
-    <!-- Поиск соперника -->
-    <div id="searchingOverlay">
-        <div class="spinner"></div>
-        <h2>🔍 Поиск соперника...</h2>
-        <p>Ожидайте подключения</p>
-        <button onclick="cancelSearch()" style="margin-top: 20px;">Отменить</button>
-    </div>
-    
-    <!-- Игровой контейнер -->
-    <div id="gameContainer">
-        <div id="playerInfo">
-            <div class="player" id="player1">
-                <span>⬜</span>
-                <span id="player1Name">Вы</span>
-            </div>
-            <div class="player" id="player2">
-                <span>⬛</span>
-                <span id="player2Name">Соперник</span>
-            </div>
+    <div id="app">
+        <h1>♟️ Шахматы</h1>
+        
+        <!-- Выбор режима -->
+        <div id="modeSelect">
+            <h2 style="font-size: 18px;">Выберите режим:</h2>
+            <button onclick="startLocalGame()">👤 Играть с собой</button>
+            <button onclick="searchOpponent()">🌐 Играть онлайн</button>
         </div>
         
-        <div id="status">Ход белых</div>
-        <div id="board"></div>
-        
-        <div class="controls">
-            <button onclick="leaveGame()">🚪 Выйти</button>
-            <button onclick="offerDraw()" id="drawBtn">🤝 Предложить ничью</button>
-            <button onclick="resign()">🏳️ Сдаться</button>
+        <!-- Поиск соперника -->
+        <div id="searchingOverlay">
+            <div class="spinner"></div>
+            <h2>🔍 Поиск соперника...</h2>
+            <p>Ожидайте подключения</p>
+            <button onclick="cancelSearch()" style="margin-top: 20px;">Отменить</button>
         </div>
         
-        <div id="moveHistory"></div>
+        <!-- Игровой контейнер -->
+        <div id="gameContainer">
+            <div id="playerInfo">
+                <div class="player" id="player1">
+                    <span>⬜</span>
+                    <span id="player1Name">Вы</span>
+                </div>
+                <div class="player" id="player2">
+                    <span>⬛</span>
+                    <span id="player2Name">Соперник</span>
+                </div>
+            </div>
+            
+            <!-- Переключатель режима управления -->
+            <div id="clickModeToggle">
+                <label>
+                    <input type="checkbox" id="clickMode" onchange="toggleClickMode()">
+                    Режим клика (для удобства)
+                </label>
+            </div>
+            
+            <div id="status">Ход белых</div>
+            
+            <!-- Контейнер доски -->
+            <div id="boardContainer">
+                <div id="board"></div>
+            </div>
+            
+            <div class="controls">
+                <button onclick="leaveGame()">🚪 Выйти</button>
+                <button onclick="offerDraw()" id="drawBtn">🤝 Ничья</button>
+                <button onclick="resign()">🏳️ Сдаться</button>
+            </div>
+            
+            <div id="moveHistory"></div>
+        </div>
     </div>
     
     <script>
         // ============= КОНФИГУРАЦИЯ FIREBASE =============
-        // 👇 ВСТАВЬТЕ СЮДА ВАШУ КОНФИГУРАЦИЮ ИЗ FIREBASE
         const firebaseConfig = {
-        apiKey: "AIzaSyAzAyiWKbGDAHguSTvIsnd0-Ki6rMj09Ps",
-        authDomain: "chess-bot-83296.firebaseapp.com",
-        databaseURL: "https://chess-bot-83296-default-rtdb.europe-west1.firebasedatabase.app",
-        projectId: "chess-bot-83296",
-        storageBucket: "chess-bot-83296.firebasestorage.app",
-        messagingSenderId: "770339691566",
-        appId: "1:770339691566:web:2d7ee1df85497cd18a93bf",
-        measurementId: "G-0JEP0N3E66"
+            apiKey: "AIzaSyAzAyiWKbGDAHguSTvIsnd0-Ki6rMj09Ps",
+            authDomain: "chess-bot-83296.firebaseapp.com",
+            databaseURL: "https://chess-bot-83296-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "chess-bot-83296",
+            storageBucket: "chess-bot-83296.firebasestorage.app",
+            messagingSenderId: "770339691566",
+            appId: "1:770339691566:web:2d7ee1df85497cd18a93bf",
+            measurementId: "G-0JEP0N3E66"
         };
         
         // Инициализация Firebase
@@ -209,6 +321,26 @@
         tg.expand();
         tg.enableClosingConfirmation();
         
+        if (tg.disableVerticalSwipes) {
+            tg.disableVerticalSwipes();
+        }
+        
+        // ============= БЛОКИРОВКА СВАЙПА =============
+        document.addEventListener('touchmove', function(e) {
+            if (!e.target.closest('#moveHistory') && !e.target.closest('#app')) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const boardContainer = document.getElementById('boardContainer');
+            if (boardContainer) {
+                boardContainer.addEventListener('touchmove', function(e) {
+                    e.stopPropagation();
+                }, { passive: false });
+            }
+        });
+        
         // ============= ИГРОВЫЕ ПЕРЕМЕННЫЕ =============
         let game = new Chess();
         let board = null;
@@ -218,38 +350,137 @@
         let isOnlineGame = false;
         let moveHistory = [];
         let gameRef = null;
+        let waitingRef = null; // Ссылка на обработчик ожидания
+        let selectedSquare = null;
+        let isClickMode = false;
+        let gameStarted = false; // НОВЫЙ ФЛАГ
+        let opponentFound = false; // НОВЫЙ ФЛАГ
         
-        // ID пользователя из Telegram
         playerId = tg.initDataUnsafe?.user?.id || 'user_' + Math.random().toString(36).substr(2, 9);
         
-        // ============= РЕЖИМЫ ИГРЫ =============
+        // ============= РЕЖИМ КЛИКА =============
+        function toggleClickMode() {
+            isClickMode = document.getElementById('clickMode').checked;
+            
+            if (isClickMode) {
+                board = Chessboard('board', {
+                    draggable: false,
+                    position: game.fen(),
+                    onSquareClick: onSquareClick,
+                    pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+                });
+                
+                if (playerColor === 'b') {
+                    board.orientation('black');
+                }
+            } else {
+                initBoard();
+                board.position(game.fen());
+                if (playerColor === 'b') {
+                    board.orientation('black');
+                }
+            }
+            
+            tg.HapticFeedback?.impactOccurred('light');
+        }
         
+        function onSquareClick(square) {
+            $('.square-55d63').removeClass('selected possible-move');
+            
+            const piece = game.get(square);
+            
+            if (selectedSquare) {
+                const move = game.move({
+                    from: selectedSquare,
+                    to: square,
+                    promotion: 'q'
+                });
+                
+                if (move) {
+                    board.position(game.fen());
+                    selectedSquare = null;
+                    
+                    moveHistory.push(move.san);
+                    updateMoveHistory();
+                    updateStatus();
+                    
+                    if (isOnlineGame && gameRef) {
+                        sendMoveToServer(move);
+                    }
+                    
+                    tg.HapticFeedback?.impactOccurred('medium');
+                    checkGameOver();
+                } else if (piece && canSelectPiece(piece, square)) {
+                    selectedSquare = square;
+                    highlightSquare(square);
+                    showPossibleMoves(square);
+                    tg.HapticFeedback?.impactOccurred('light');
+                } else {
+                    selectedSquare = null;
+                    tg.HapticFeedback?.notificationOccurred('error');
+                }
+            } else if (piece && canSelectPiece(piece, square)) {
+                selectedSquare = square;
+                highlightSquare(square);
+                showPossibleMoves(square);
+                tg.HapticFeedback?.impactOccurred('light');
+            }
+        }
+        
+        function canSelectPiece(piece, square) {
+            if (game.game_over()) return false;
+            
+            if (isOnlineGame) {
+                if (playerColor === 'w' && piece.color === 'b') return false;
+                if (playerColor === 'b' && piece.color === 'w') return false;
+                if (game.turn() !== playerColor) return false;
+            } else {
+                if (game.turn() !== piece.color) return false;
+            }
+            
+            return true;
+        }
+        
+        function highlightSquare(square) {
+            $('#board .square-' + square).addClass('selected');
+        }
+        
+        function showPossibleMoves(square) {
+            const moves = game.moves({ square: square, verbose: true });
+            moves.forEach(move => {
+                $('#board .square-' + move.to).addClass('possible-move');
+            });
+        }
+        
+        // ============= РЕЖИМЫ ИГРЫ =============
         function startLocalGame() {
             isOnlineGame = false;
             playerColor = 'both';
+            gameStarted = true;
             document.getElementById('modeSelect').style.display = 'none';
             document.getElementById('gameContainer').style.display = 'block';
             document.getElementById('drawBtn').style.display = 'none';
+            document.getElementById('player1Name').textContent = 'Белые';
+            document.getElementById('player2Name').textContent = 'Черные';
             initBoard();
             updateStatus();
         }
         
         function searchOpponent() {
             isOnlineGame = true;
+            opponentFound = false;
+            gameStarted = false;
             document.getElementById('searchingOverlay').style.display = 'flex';
             
-            // Поиск доступной игры или создание новой
             const waitingGamesRef = database.ref('waiting_games');
             
             waitingGamesRef.once('value', (snapshot) => {
                 const waitingGames = snapshot.val();
                 let foundGame = false;
                 
-                // Ищем доступную игру
                 if (waitingGames) {
                     for (let gId in waitingGames) {
                         if (waitingGames[gId].player1 !== playerId) {
-                            // Найдена игра!
                             joinGame(gId);
                             foundGame = true;
                             break;
@@ -257,7 +488,6 @@
                     }
                 }
                 
-                // Если не нашли, создаем новую
                 if (!foundGame) {
                     createGame();
                 }
@@ -288,11 +518,13 @@
             
             playerColor = 'w';
             
-            // Слушаем подключение соперника
-            gameRef.on('value', (snapshot) => {
+            // ИСПРАВЛЕНИЕ: Слушаем только один раз подключение соперника
+            waitingRef = gameRef.on('value', (snapshot) => {
                 const data = snapshot.val();
-                if (data && data.player2) {
-                    // Соперник подключился!
+                if (data && data.player2 && !opponentFound) {
+                    opponentFound = true;
+                    // Отписываемся от этого события
+                    gameRef.off('value', waitingRef);
                     database.ref('waiting_games/' + gameId).remove();
                     startOnlineGame(data);
                 }
@@ -303,8 +535,8 @@
             gameId = gId;
             gameRef = database.ref('games/' + gameId);
             playerColor = 'b';
+            opponentFound = true;
             
-            // Присоединяемся к игре
             gameRef.update({
                 player2: playerId,
                 player2Name: tg.initDataUnsafe?.user?.first_name || 'Игрок 2',
@@ -319,53 +551,61 @@
         }
         
         function startOnlineGame(gameData) {
+            // ИСПРАВЛЕНИЕ: Проверяем что игра еще не началась
+            if (gameStarted) return;
+            gameStarted = true;
+            
             document.getElementById('searchingOverlay').style.display = 'none';
             document.getElementById('modeSelect').style.display = 'none';
             document.getElementById('gameContainer').style.display = 'block';
             
-            // Обновляем имена игроков
             if (playerColor === 'w') {
-                document.getElementById('player1Name').textContent = 'Вы (Белые)';
+                document.getElementById('player1Name').textContent = 'Вы (⬜)';
                 document.getElementById('player2Name').textContent = gameData.player2Name || 'Соперник';
             } else {
                 document.getElementById('player1Name').textContent = gameData.player1Name || 'Соперник';
-                document.getElementById('player2Name').textContent = 'Вы (Черные)';
+                document.getElementById('player2Name').textContent = 'Вы (⬛)';
             }
             
             initBoard();
             
-            // Если играем черными, переворачиваем доску
             if (playerColor === 'b') {
                 board.orientation('black');
             }
             
-            // Слушаем изменения в игре
+            // ИСПРАВЛЕНИЕ: Новый обработчик только для обновлений игры
             gameRef.on('value', (snapshot) => {
                 const data = snapshot.val();
-                if (data) {
+                if (data && gameStarted) {
                     updateGameFromServer(data);
                 }
             });
             
             updateStatus();
             
+            // ИСПРАВЛЕНИЕ: Показываем popup только один раз
             tg.showPopup({
-                title: 'Игра началась!',
+                title: 'Игра началась! 🎮',
                 message: 'Соперник найден. Удачи!',
                 buttons: [{type: 'ok'}]
             });
+            
+            tg.HapticFeedback?.notificationOccurred('success');
         }
         
         function cancelSearch() {
-            if (gameRef) {
+            if (gameRef && waitingRef) {
+                gameRef.off('value', waitingRef);
                 gameRef.remove();
+            }
+            if (gameId) {
                 database.ref('waiting_games/' + gameId).remove();
             }
             location.reload();
         }
         
         function leaveGame() {
-            tg.showConfirm('Вы уверены что хотите выйти?', (confirmed) => {
+            tg.showConfirm('Выйти из игры?', (confirmed) => {
                 if (confirmed) {
                     if (gameRef && isOnlineGame) {
                         gameRef.update({ 
@@ -380,7 +620,7 @@
         }
         
         function resign() {
-            tg.showConfirm('Вы уверены что хотите сдаться?', (confirmed) => {
+            tg.showConfirm('Сдаться?', (confirmed) => {
                 if (confirmed) {
                     if (isOnlineGame && gameRef) {
                         gameRef.update({
@@ -396,7 +636,7 @@
         
         function offerDraw() {
             if (isOnlineGame && gameRef) {
-                tg.showConfirm('Предложить ничью сопернику?', (confirmed) => {
+                tg.showConfirm('Предложить ничью?', (confirmed) => {
                     if (confirmed) {
                         gameRef.child('drawOffer').set(playerColor);
                         tg.showAlert('Предложение отправлено');
@@ -406,7 +646,6 @@
         }
         
         // ============= ШАХМАТНАЯ ЛОГИКА =============
-        
         function initBoard() {
             const config = {
                 draggable: true,
@@ -414,7 +653,10 @@
                 onDragStart: onDragStart,
                 onDrop: onDrop,
                 onSnapEnd: onSnapEnd,
-                pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+                pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+                moveSpeed: 'fast',
+                snapbackSpeed: 200,
+                snapSpeed: 50
             };
             
             board = Chessboard('board', config);
@@ -423,16 +665,13 @@
         }
         
         function onDragStart(source, piece) {
-            // Запрет хода если игра окончена
             if (game.game_over()) return false;
             
-            // В онлайн игре - только свои фигуры и свой ход
             if (isOnlineGame) {
                 if (playerColor === 'w' && piece.search(/^b/) !== -1) return false;
                 if (playerColor === 'b' && piece.search(/^w/) !== -1) return false;
                 if (game.turn() !== playerColor) return false;
             } else {
-                // В локальной игре - по очереди
                 if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
                     (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
                     return false;
@@ -453,66 +692,70 @@
             updateMoveHistory();
             updateStatus();
             
-            // Отправка хода на сервер
             if (isOnlineGame && gameRef) {
-                gameRef.update({
-                    fen: game.fen(),
-                    turn: game.turn(),
-                    moves: moveHistory,
-                    lastMove: {
-                        from: source,
-                        to: target,
-                        san: move.san,
-                        timestamp: Date.now()
-                    }
-                });
-                
-                // Проверка окончания игры
-                if (game.game_over()) {
-                    let result = {};
-                    if (game.in_checkmate()) {
-                        result = {
-                            status: 'finished',
-                            winner: game.turn() === 'w' ? 'b' : 'w',
-                            result: 'checkmate'
-                        };
-                    } else {
-                        result = {
-                            status: 'finished',
-                            winner: 'draw',
-                            result: game.in_stalemate() ? 'stalemate' : 'draw'
-                        };
-                    }
-                    gameRef.update(result);
-                }
+                sendMoveToServer(move);
             }
             
-            if (tg.HapticFeedback) {
-                tg.HapticFeedback.impactOccurred('light');
-            }
+            tg.HapticFeedback?.impactOccurred('light');
+            checkGameOver();
         }
         
         function onSnapEnd() {
             board.position(game.fen());
         }
         
+        function sendMoveToServer(move) {
+            gameRef.update({
+                fen: game.fen(),
+                turn: game.turn(),
+                moves: moveHistory,
+                lastMove: {
+                    from: move.from,
+                    to: move.to,
+                    san: move.san,
+                    timestamp: Date.now()
+                }
+            });
+        }
+        
+        function checkGameOver() {
+            if (game.game_over()) {
+                let result = {};
+                if (game.in_checkmate()) {
+                    result = {
+                        status: 'finished',
+                        winner: game.turn() === 'w' ? 'b' : 'w',
+                        result: 'checkmate'
+                    };
+                } else {
+                    result = {
+                        status: 'finished',
+                        winner: 'draw',
+                        result: game.in_stalemate() ? 'stalemate' : 'draw'
+                    };
+                }
+                
+                if (isOnlineGame && gameRef) {
+                    gameRef.update(result);
+                }
+            }
+        }
+        
         function updateGameFromServer(data) {
             if (!data) return;
             
-            // Обновляем позицию если она изменилась
-            if (data.fen !== game.fen()) {
+            // ИСПРАВЛЕНИЕ: Обновляем только если позиция изменилась
+            if (data.fen && data.fen !== game.fen()) {
                 game.load(data.fen);
                 board.position(data.fen);
                 moveHistory = data.moves || [];
                 updateMoveHistory();
                 updateStatus();
                 
-                if (tg.HapticFeedback) {
-                    tg.HapticFeedback.notificationOccurred('success');
-                }
+                tg.HapticFeedback?.notificationOccurred('success');
             }
             
-            // Проверка предложения ничьи
+            // Предложение ничьей
             if (data.drawOffer && data.drawOffer !== playerColor) {
                 gameRef.child('drawOffer').remove();
                 tg.showConfirm('Соперник предлагает ничью. Принять?', (confirmed) => {
@@ -526,7 +769,7 @@
                 });
             }
             
-            // Проверка окончания игры
+            // Окончание игры
             if (data.status === 'finished') {
                 let message = '';
                 if (data.winner === playerColor) {
@@ -537,17 +780,24 @@
                     message = '😞 Вы проиграли';
                 }
                 
-                setTimeout(() => {
-                    tg.showPopup({
-                        title: 'Игра окончена',
-                        message: message,
-                        buttons: [{type: 'ok'}]
-                    });
-                }, 500);
+                // Показываем только один раз
+                if (!sessionStorage.getItem('gameEnded_' + gameId)) {
+                    sessionStorage.setItem('gameEnded_' + gameId, 'true');
+                    setTimeout(() => {
+                        tg.showPopup({
+                            title: 'Игра окончена',
+                            message: message,
+                            buttons: [{type: 'ok'}]
+                        });
+                    }, 500);
+                }
             }
             
             if (data.status === 'abandoned') {
-                tg.showAlert('Соперник покинул игру. Вы победили!');
+                if (!sessionStorage.getItem('gameAbandoned_' + gameId)) {
+                    sessionStorage.setItem('gameAbandoned_' + gameId, 'true');
+                    tg.showAlert('Соперник покинул игру');
+                }
             }
         }
         
@@ -555,7 +805,6 @@
             let status = '';
             let moveColor = game.turn() === 'w' ? 'Белые' : 'Черные';
             
-            // Подсветка активного игрока
             document.getElementById('player1').classList.remove('active');
             document.getElementById('player2').classList.remove('active');
             
@@ -569,7 +818,7 @@
                         document.getElementById('player2').classList.add('active');
                     }
                 } else {
-                    status = '⏳ Ход соперника...';
+                    status = '⏳ Ход соперника';
                     if (playerColor === 'w') {
                         document.getElementById('player2').classList.add('active');
                     } else {
@@ -608,10 +857,24 @@
                 }
             }
             document.getElementById('moveHistory').innerHTML = html;
+            
+            // Прокрутка вниз
+            const historyDiv = document.getElementById('moveHistory');
+            historyDiv.scrollTop = historyDiv.scrollHeight;
         }
         
-        // Адаптация
-        window.addEventListener('resize', () => { if (board) board.resize(); });
+        // Запрет жестов масштабирования
+        document.addEventListener('gesturestart', function(e) {
+            e.preventDefault();
+        });
+        
+        document.addEventListener('gesturechange', function(e) {
+            e.preventDefault();
+        });
+        
+        document.addEventListener('gestureend', function(e) {
+            e.preventDefault();
+        });
     </script>
 </body>
 </html>
