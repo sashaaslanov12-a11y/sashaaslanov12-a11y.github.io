@@ -251,6 +251,7 @@
             <h2 style="font-size: 18px;">Выберите режим:</h2>
             <button onclick="startLocalGame()">👤 Играть с собой</button>
             <button onclick="searchOpponent()">🌐 Играть онлайн</button>
+            <button onclick="startAiGame()" style="background: #4a9c2d;">🤖 Играть с ИИ</button>
         </div>
         
         <!-- Поиск соперника -->
@@ -272,14 +273,6 @@
                     <span>⬛</span>
                     <span id="player2Name">Соперник</span>
                 </div>
-            </div>
-            
-            <!-- Переключатель режима управления -->
-            <div id="clickModeToggle">
-                <label>
-                    <input type="checkbox" id="clickMode" onchange="toggleClickMode()">
-                    Режим клика (для удобства)
-                </label>
             </div>
             
             <div id="status">Ход белых</div>
@@ -355,6 +348,7 @@
         let isClickMode = false;
         let gameStarted = false; // НОВЫЙ ФЛАГ
         let opponentFound = false; // НОВЫЙ ФЛАГ
+        let isAiGame = false;
         
         playerId = tg.initDataUnsafe?.user?.id || 'user_' + Math.random().toString(36).substr(2, 9);
         
@@ -410,6 +404,9 @@
                     
                     tg.HapticFeedback?.impactOccurred('medium');
                     checkGameOver();
+                    if (isAiGame && !game.game_over() && game.turn() === 'b') {
+        setTimeout(askAiForMove, 500);
+    }
                 } else if (piece && canSelectPiece(piece, square)) {
                     selectedSquare = square;
                     highlightSquare(square);
@@ -666,7 +663,13 @@
         
         function onDragStart(source, piece) {
             if (game.game_over()) return false;
-            
+
+            if (isAiGame) {
+        // Если сейчас ход черных (ИИ) или ты пытаешься взять черную фигуру -> запретить
+        if (game.turn() === 'b' || piece.search(/^b/) !== -1) {
+            return false;
+        }
+    }
             if (isOnlineGame) {
                 if (playerColor === 'w' && piece.search(/^b/) !== -1) return false;
                 if (playerColor === 'b' && piece.search(/^w/) !== -1) return false;
@@ -699,7 +702,9 @@
             tg.HapticFeedback?.impactOccurred('light');
             checkGameOver();
         }
-        
+        if (isAiGame && !game.game_over() && game.turn() === 'b') {
+        setTimeout(askAiForMove, 500);
+    }
         function onSnapEnd() {
             board.position(game.fen());
         }
@@ -875,6 +880,69 @@
         document.addEventListener('gestureend', function(e) {
             e.preventDefault();
         });
+        // ============= ЛОГИКА ИИ (LM STUDIO) =============
+
+// 1. Запуск игры
+function startAiGame() {
+    isOnlineGame = false;
+    isAiGame = true; // Включаем режим ИИ
+    gameStarted = true;
+    playerColor = 'w'; // Ты играешь белыми
+
+    document.getElementById('modeSelect').style.display = 'none';
+    document.getElementById('gameContainer').style.display = 'block';
+    document.getElementById('drawBtn').style.display = 'none';
+    
+    document.getElementById('player1Name').textContent = 'Вы (Игрок)';
+    document.getElementById('player2Name').textContent = 'LM Studio (ИИ)';
+    
+    initBoard();
+    updateStatus();
+    tg.showPopup({title: 'Режим ИИ', message: 'Запусти Python-скрипт и делай ход!', buttons: [{type: 'ok'}]});
+}
+
+// 2. Запрос хода у Python-сервера
+async function askAiForMove() {
+    document.getElementById('status').textContent = '🤖 ИИ думает...';
+    
+    try {
+        const response = await fetch('http://127.0.0.1:5000/get_move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fen: game.fen() })
+        });
+
+        const data = await response.json();
+        if (data.move) {
+            makeAiMoveOnBoard(data.move);
+        }
+    } catch (error) {
+        console.error(error);
+        alert("Ошибка связи с ботом! Убедись, что запущен файл chess_bot.py");
+        updateStatus(); // Вернуть статус
+    }
+}
+
+// 3. Выполнение хода ИИ на доске
+function makeAiMoveOnBoard(uciMove) {
+    const from = uciMove.substring(0, 2);
+    const to = uciMove.substring(2, 4);
+    
+    const move = game.move({
+        from: from,
+        to: to,
+        promotion: 'q'
+    });
+
+    if (move) {
+        board.position(game.fen());
+        moveHistory.push(move.san);
+        updateMoveHistory();
+        updateStatus();
+        checkGameOver();
+        tg.HapticFeedback?.notificationOccurred('success');
+    }
+}
     </script>
 </body>
 </html>
